@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1500" viewBox="0 0 1200 1500" role="img" aria-labelledby="title desc">
+  <title id="title">Keycloak and Spring Boot authentication flow</title>
+  <desc id="desc">A LinkedIn portrait infographic showing a client application authenticating through Keycloak, passing a signed JWT to a Spring Boot resource server, which validates it before reading or provisioning a PostgreSQL user profile.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07162d"/>
+      <stop offset="1" stop-color="#0a1022"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#32d6ff"/>
+      <stop offset="1" stop-color="#4d7cff"/>
+    </linearGradient>
+    <linearGradient id="purple" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#c878ff"/>
+      <stop offset="1" stop-color="#7567ff"/>
+    </linearGradient>
+    <linearGradient id="teal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#53f4cf"/>
+      <stop offset="1" stop-color="#28b9d7"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#000000" flood-opacity="0.34"/>
+    </filter>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M48 0H0V48" fill="none" stroke="#5cc9ff" stroke-opacity="0.055" stroke-width="1"/>
+    </pattern>
+    <marker id="arrow" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+      <path d="M1 1L10 6L1 11" fill="none" stroke="#81d8ff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <style>
+      .heading { font-family: Inter, Arial, sans-serif; font-weight: 800; fill: #f7fbff; letter-spacing: 1px; }
+      .body { font-family: Inter, Arial, sans-serif; fill: #f7fbff; }
+      .muted { font-family: Inter, Arial, sans-serif; fill: #bbcae5; }
+      .small { font-family: Inter, Arial, sans-serif; font-weight: 600; fill: #c9d7ee; letter-spacing: .5px; }
+      .number { font-family: Inter, Arial, sans-serif; font-weight: 800; fill: #ffffff; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="1500" fill="url(#background)"/>
+  <rect width="1200" height="1500" fill="url(#grid)"/>
+  <circle cx="1050" cy="150" r="260" fill="#264e9d" opacity="0.12"/>
+  <circle cx="120" cy="1340" r="250" fill="#442f98" opacity="0.12"/>
+
+  <text class="small" x="600" y="100" text-anchor="middle" font-size="22">AUTHENTICATION ARCHITECTURE</text>
+  <text class="heading" x="600" y="174" text-anchor="middle" font-size="60">KEYCLOAK × SPRING BOOT</text>
+  <text class="muted" x="600" y="216" text-anchor="middle" font-size="27">OAuth 2.0 / OpenID Connect · Spring Security · JWT</text>
+  <line x1="390" y1="251" x2="810" y2="251" stroke="url(#blue)" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Step 1 -->
+  <g filter="url(#shadow)">
+    <rect x="90" y="298" width="1020" height="172" rx="30" fill="#0c203d" stroke="url(#blue)" stroke-width="3"/>
+  </g>
+  <circle cx="154" cy="384" r="37" fill="#17395d" stroke="#65d4ff" stroke-width="2"/>
+  <text class="number" x="154" y="395" text-anchor="middle" font-size="31">1</text>
+  <circle cx="273" cy="359" r="25" fill="none" stroke="#f7fbff" stroke-width="5"/>
+  <path d="M227 430c0-32 20-53 46-53s46 21 46 53" fill="none" stroke="#f7fbff" stroke-width="5" stroke-linecap="round"/>
+  <rect x="344" y="337" width="86" height="102" rx="10" fill="none" stroke="#62d8ff" stroke-width="4"/>
+  <path d="M344 364h86M360 351h7M376 351h7M392 351h7M361 384h52M361 405h37" stroke="#62d8ff" stroke-width="4" stroke-linecap="round"/>
+  <text class="heading" x="500" y="372" font-size="37">USER &amp; CLIENT APP</text>
+  <text class="muted" x="500" y="414" font-size="24">Starts sign-in and sends the access token</text>
+
+  <line x1="600" y1="470" x2="600" y2="532" stroke="#81d8ff" stroke-width="4" marker-end="url(#arrow)"/>
+
+  <!-- Step 2 -->
+  <g filter="url(#shadow)">
+    <rect x="90" y="554" width="1020" height="172" rx="30" fill="#171d4d" stroke="url(#purple)" stroke-width="3"/>
+  </g>
+  <circle cx="154" cy="640" r="37" fill="#30255f" stroke="#c987ff" stroke-width="2"/>
+  <text class="number" x="154" y="651" text-anchor="middle" font-size="31">2</text>
+  <path d="M270 594l57 22v47c0 35-23 58-57 72c-34-14-57-37-57-72v-47z" fill="none" stroke="#ca8bff" stroke-width="5" stroke-linejoin="round"/>
+  <circle cx="270" cy="645" r="16" fill="none" stroke="#f7fbff" stroke-width="5"/>
+  <path d="M259 657l-42 42m12-12l13 13m-1-30l13 13" stroke="#f7fbff" stroke-width="5" stroke-linecap="round"/>
+  <text class="heading" x="420" y="628" font-size="37">KEYCLOAK</text>
+  <text class="body" x="420" y="670" font-size="28">Identity Provider &amp; Authorization Server</text>
+  <text class="muted" x="420" y="705" font-size="22">Authenticates the user and issues a signed JWT</text>
+
+  <line x1="600" y1="726" x2="600" y2="788" stroke="#81d8ff" stroke-width="4" marker-end="url(#arrow)"/>
+  <g filter="url(#shadow)">
+    <rect x="728" y="733" width="302" height="84" rx="18" fill="#201c4a" stroke="#b978ff" stroke-width="2.5"/>
+  </g>
+  <path d="M760 754h42l15 15v27h-57zM802 754v17h15" fill="none" stroke="#d2a3ff" stroke-width="3" stroke-linejoin="round"/>
+  <text class="heading" x="844" y="769" font-size="25">SIGNED JWT</text>
+  <text class="muted" x="844" y="796" font-size="18">Bearer access token</text>
+
+  <!-- Step 3 -->
+  <g filter="url(#shadow)">
+    <rect x="90" y="842" width="1020" height="350" rx="30" fill="#0d2a34" stroke="url(#teal)" stroke-width="3"/>
+  </g>
+  <circle cx="154" cy="919" r="37" fill="#15494d" stroke="#55f0d2" stroke-width="2"/>
+  <text class="number" x="154" y="930" text-anchor="middle" font-size="31">3</text>
+  <rect x="222" y="923" width="124" height="128" rx="12" fill="none" stroke="#59ead0" stroke-width="5"/>
+  <path d="M222 958h124M246 942h12M287 942h48M246 982h12M273 982h48M246 1022h12M273 1022h48" stroke="#59ead0" stroke-width="5" stroke-linecap="round"/>
+  <path d="M330 1003l52 18v44c0 31-21 52-52 65c-31-13-52-34-52-65v-44z" fill="#0d2a34" stroke="#f7fbff" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M305 1063l17 17l34-40" fill="none" stroke="#f7fbff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text class="heading" x="450" y="920" font-size="38">SPRING BOOT RESOURCE SERVER</text>
+  <text class="muted" x="450" y="958" font-size="23">Spring Security validates the token before API access</text>
+  <g transform="translate(450 1000)">
+    <circle cx="13" cy="13" r="13" fill="#18c8a5"/><path d="M7 13l4 4l8-9" fill="none" stroke="#062b2f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <text class="body" x="39" y="21" font-size="25">JWT signature via Keycloak JWKS</text>
+    <circle cx="13" cy="58" r="13" fill="#18c8a5"/><path d="M7 58l4 4l8-9" fill="none" stroke="#062b2f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <text class="body" x="39" y="66" font-size="25">Issuer, audience and token expiry</text>
+    <circle cx="13" cy="103" r="13" fill="#18c8a5"/><path d="M7 103l4 4l8-9" fill="none" stroke="#062b2f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <text class="body" x="39" y="111" font-size="25">Verified email and one FieldOps role</text>
+    <circle cx="13" cy="148" r="13" fill="#18c8a5"/><path d="M7 148l4 4l8-9" fill="none" stroke="#062b2f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <text class="body" x="39" y="156" font-size="25">Stateless route authorization</text>
+  </g>
+
+  <line x1="600" y1="1192" x2="600" y2="1250" stroke="#81d8ff" stroke-width="4" marker-end="url(#arrow)"/>
+
+  <!-- Step 4 -->
+  <g filter="url(#shadow)">
+    <rect x="90" y="1272" width="1020" height="122" rx="28" fill="#0c203d" stroke="url(#blue)" stroke-width="3"/>
+  </g>
+  <circle cx="154" cy="1333" r="35" fill="#17395d" stroke="#65d4ff" stroke-width="2"/>
+  <text class="number" x="154" y="1344" text-anchor="middle" font-size="29">4</text>
+  <ellipse cx="277" cy="1309" rx="43" ry="15" fill="none" stroke="#84bfff" stroke-width="4"/>
+  <path d="M234 1309v49c0 9 19 17 43 17s43-8 43-17v-49M234 1334c0 9 19 17 43 17s43-8 43-17" fill="none" stroke="#84bfff" stroke-width="4"/>
+  <text class="heading" x="382" y="1328" font-size="34">POSTGRESQL USER PROFILE</text>
+  <text class="muted" x="382" y="1363" font-size="22">Link or create the user by issuer + subject, then synchronize the profile</text>
+
+  <text class="body" x="600" y="1451" text-anchor="middle" font-size="27">Authenticate with <tspan fill="#c78aff">Keycloak</tspan>. Authorize with <tspan fill="#55e8d2">Spring Security</tspan>.</text>
+</svg>
