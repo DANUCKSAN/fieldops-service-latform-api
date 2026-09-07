@@ -1,6 +1,7 @@
 package org.electrifyingaustralia.fieldops.integration;
 
 import java.util.List;
+import org.electrifyingaustralia.fieldops.config.PostgresTestContainerConfiguration;
 import org.electrifyingaustralia.fieldops.entity.User;
 import org.electrifyingaustralia.fieldops.enums.UserRole;
 import org.electrifyingaustralia.fieldops.repository.UserRepository;
@@ -9,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.JwtRequestPostProcessor;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -21,6 +23,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+@Import(PostgresTestContainerConfiguration.class)
 @SpringBootTest
 @ActiveProfiles("test")
 @AutoConfigureMockMvc
