@@ -6,10 +6,14 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.net.URI;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.electrifyingaustralia.fieldops.dto.request.CancelJobRequest;
 import org.electrifyingaustralia.fieldops.dto.request.CreateJobRequest;
+import org.electrifyingaustralia.fieldops.dto.request.DispatchJobRequest;
 import org.electrifyingaustralia.fieldops.dto.response.JobResponse;
+import org.electrifyingaustralia.fieldops.dto.response.JobStatusHistoryResponse;
 import org.electrifyingaustralia.fieldops.dto.response.JobSummaryResponse;
 import org.electrifyingaustralia.fieldops.dto.response.PagedResponse;
 import org.electrifyingaustralia.fieldops.service.JobService;
@@ -70,5 +74,39 @@ public class JobController {
             @AuthenticationPrincipal Jwt jwt
     ) {
         return jobService.list(page, size, jwt);
+    }
+
+    @PostMapping("/{id}/dispatch")
+    public JobResponse dispatch(
+            @PathVariable UUID id,
+            @Valid @RequestBody DispatchJobRequest request,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return jobService.dispatch(id, request, jwt);
+    }
+
+    @PostMapping("/{id}/cancel")
+    public JobResponse cancel(
+            @PathVariable UUID id,
+            @Valid @RequestBody CancelJobRequest request,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return jobService.cancel(id, request, jwt);
+    }
+
+    @PostMapping("/{id}/complete")
+    public JobResponse complete(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return jobService.complete(id, jwt);
+    }
+
+    @GetMapping("/{id}/history")
+    public List<JobStatusHistoryResponse> history(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return jobService.history(id, jwt);
     }
 }

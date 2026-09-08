@@ -9,17 +9,23 @@ import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.electrifyingaustralia.fieldops.constant.DatabaseConstraints;
+import org.electrifyingaustralia.fieldops.dto.request.CancelJobRequest;
 import org.electrifyingaustralia.fieldops.dto.request.CreateJobRequest;
+import org.electrifyingaustralia.fieldops.dto.request.DispatchJobRequest;
 import org.electrifyingaustralia.fieldops.dto.request.MaterialAllocationRequest;
 import org.electrifyingaustralia.fieldops.dto.response.JobResponse;
+import org.electrifyingaustralia.fieldops.dto.response.JobStatusHistoryResponse;
 import org.electrifyingaustralia.fieldops.dto.response.JobSummaryResponse;
 import org.electrifyingaustralia.fieldops.dto.response.PagedResponse;
 import org.electrifyingaustralia.fieldops.entity.FieldJob;
 import org.electrifyingaustralia.fieldops.entity.Installer;
 import org.electrifyingaustralia.fieldops.entity.InventoryBalance;
+import org.electrifyingaustralia.fieldops.entity.JobAllocation;
+import org.electrifyingaustralia.fieldops.entity.JobStatusHistory;
 import org.electrifyingaustralia.fieldops.entity.Product;
 import org.electrifyingaustralia.fieldops.entity.StockMovement;
 import org.electrifyingaustralia.fieldops.entity.User;
+import org.electrifyingaustralia.fieldops.enums.JobStatus;
 import org.electrifyingaustralia.fieldops.enums.ProductCategory;
 import org.electrifyingaustralia.fieldops.exception.ConflictException;
 import org.electrifyingaustralia.fieldops.exception.InvalidOperationException;
@@ -27,6 +33,7 @@ import org.electrifyingaustralia.fieldops.exception.ResourceNotFoundException;
 import org.electrifyingaustralia.fieldops.repository.FieldJobRepository;
 import org.electrifyingaustralia.fieldops.repository.InstallerRepository;
 import org.electrifyingaustralia.fieldops.repository.InventoryBalanceRepository;
+import org.electrifyingaustralia.fieldops.repository.JobStatusHistoryRepository;
 import org.electrifyingaustralia.fieldops.repository.StockMovementRepository;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -45,6 +52,7 @@ public class JobService {
     private final InstallerRepository installerRepository;
     private final InventoryBalanceRepository balanceRepository;
     private final StockMovementRepository movementRepository;
+    private final JobStatusHistoryRepository historyRepository;
     private final UserService userService;
 
     @Transactional
@@ -115,6 +123,8 @@ public class JobService {
             throw exception;
         }
 
+        historyRepository.save(JobStatusHistory.initialAllocation(job, actor));
+
         for (InventoryBalance balance : balances) {
             Product product = balance.getProduct();
             int quantity = requestedMaterials.get(product.getId()).quantity();
@@ -180,6 +190,206 @@ public class JobService {
         Page<JobSummaryResponse> jobs = jobRepository.findAllBy(pageRequest)
                 .map(JobSummaryResponse::from);
         return PagedResponse.from(jobs);
+    }
+
+    @Transactional
+    @PreAuthorize("hasAnyRole('ADMIN', 'WAREHOUSE_OPR')")
+    public JobResponse dispatch(
+            UUID id,
+            DispatchJobRequest request,
+            Jwt jwt
+    ) {
+        User actor = userService.resolveAuthenticatedUser(jwt);
+        FieldJob job = findForUpdate(id);
+
+        if (job.getStatus() == JobStatus.DISPATCHED) {
+            return JobResponse.from(job);
+        }
+        requireTransition(job, JobStatus.ALLOCATED, JobStatus.DISPATCHED);
+
+        Map<UUID, Integer> quantities = allocationQuantities(job);
+        List<InventoryBalance> balances = lockAllocatedBalances(quantities);
+        ensureReservationsExist(balances, quantities);
+
+        job.dispatch();
+        for (InventoryBalance balance : balances) {
+            int quantity = quantities.get(balance.getProduct().getId());
+            balance.dispatchReserved(quantity);
+            movementRepository.save(StockMovement.dispatch(
+                    balance.getProduct(),
+                    job,
+                    quantity,
+                    balance.getOnHandQuantity(),
+                    balance.getReservedQuantity(),
+                    request.dispatchReference(),
+                    request.note(),
+                    actor
+            ));
+        }
+        historyRepository.save(JobStatusHistory.transition(
+                job,
+                JobStatus.ALLOCATED,
+                JobStatus.DISPATCHED,
+                request.dispatchReference(),
+                request.note(),
+                actor
+        ));
+
+        flushLifecycleChanges(balances);
+        return JobResponse.from(job);
+    }
+
+    @Transactional
+    @PreAuthorize("hasRole('ADMIN')")
+    public JobResponse cancel(UUID id, CancelJobRequest request, Jwt jwt) {
+        User actor = userService.resolveAuthenticatedUser(jwt);
+        FieldJob job = findForUpdate(id);
+
+        if (job.getStatus() == JobStatus.CANCELLED) {
+            return JobResponse.from(job);
+        }
+        requireTransition(job, JobStatus.ALLOCATED, JobStatus.CANCELLED);
+
+        Map<UUID, Integer> quantities = allocationQuantities(job);
+        List<InventoryBalance> balances = lockAllocatedBalances(quantities);
+        ensureReservationsExist(balances, quantities);
+
+        job.cancel();
+        for (InventoryBalance balance : balances) {
+            int quantity = quantities.get(balance.getProduct().getId());
+            balance.releaseReservation(quantity);
+            movementRepository.save(StockMovement.reservationRelease(
+                    balance.getProduct(),
+                    job,
+                    quantity,
+                    balance.getOnHandQuantity(),
+                    balance.getReservedQuantity(),
+                    request.reason(),
+                    actor
+            ));
+        }
+        historyRepository.save(JobStatusHistory.transition(
+                job,
+                JobStatus.ALLOCATED,
+                JobStatus.CANCELLED,
+                job.getJobId(),
+                request.reason(),
+                actor
+        ));
+
+        flushLifecycleChanges(balances);
+        return JobResponse.from(job);
+    }
+
+    @Transactional
+    @PreAuthorize("hasAnyRole('ADMIN', 'WAREHOUSE_OPR')")
+    public JobResponse complete(UUID id, Jwt jwt) {
+        User actor = userService.resolveAuthenticatedUser(jwt);
+        FieldJob job = findForUpdate(id);
+
+        if (job.getStatus() == JobStatus.COMPLETED) {
+            return JobResponse.from(job);
+        }
+        requireTransition(job, JobStatus.DISPATCHED, JobStatus.COMPLETED);
+
+        job.complete();
+        historyRepository.save(JobStatusHistory.transition(
+                job,
+                JobStatus.DISPATCHED,
+                JobStatus.COMPLETED,
+                null,
+                null,
+                actor
+        ));
+        jobRepository.flush();
+        historyRepository.flush();
+        return JobResponse.from(job);
+    }
+
+    @Transactional
+    @PreAuthorize("hasAnyRole('ADMIN', 'WAREHOUSE_OPR')")
+    public List<JobStatusHistoryResponse> history(UUID id, Jwt jwt) {
+        userService.resolveAuthenticatedUser(jwt);
+        if (!jobRepository.existsById(id)) {
+            throw jobNotFound(id);
+        }
+        return historyRepository
+                .findAllByJobIdOrderByCreatedAtAscIdAsc(id)
+                .stream()
+                .map(JobStatusHistoryResponse::from)
+                .toList();
+    }
+
+    private FieldJob findForUpdate(UUID id) {
+        return jobRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> jobNotFound(id));
+    }
+
+    private Map<UUID, Integer> allocationQuantities(FieldJob job) {
+        Map<UUID, Integer> quantities = new HashMap<>();
+        for (JobAllocation allocation : job.getAllocations()) {
+            quantities.put(
+                    allocation.getProduct().getId(),
+                    allocation.getQuantity()
+            );
+        }
+        return quantities;
+    }
+
+    private List<InventoryBalance> lockAllocatedBalances(
+            Map<UUID, Integer> quantities
+    ) {
+        List<InventoryBalance> balances =
+                balanceRepository.findAllByProductIdForUpdate(
+                        quantities.keySet()
+                );
+        ensureAllProductsExist(quantities.keySet(), balances);
+        return balances;
+    }
+
+    private void ensureReservationsExist(
+            List<InventoryBalance> balances,
+            Map<UUID, Integer> quantities
+    ) {
+        for (InventoryBalance balance : balances) {
+            int expected = quantities.get(balance.getProduct().getId());
+            if (balance.getReservedQuantity() < expected) {
+                throw new ConflictException(
+                        "RESERVATION_MISMATCH",
+                        "Reserved stock no longer matches job allocation for "
+                                + balance.getProduct().getSku()
+                );
+            }
+        }
+    }
+
+    private void requireTransition(
+            FieldJob job,
+            JobStatus expected,
+            JobStatus requested
+    ) {
+        if (job.getStatus() != expected) {
+            throw new ConflictException(
+                    "INVALID_JOB_TRANSITION",
+                    "Job " + job.getJobId()
+                            + " cannot transition from " + job.getStatus()
+                            + " to " + requested
+            );
+        }
+    }
+
+    private void flushLifecycleChanges(List<InventoryBalance> balances) {
+        balanceRepository.saveAllAndFlush(balances);
+        jobRepository.flush();
+        movementRepository.flush();
+        historyRepository.flush();
+    }
+
+    private ResourceNotFoundException jobNotFound(UUID id) {
+        return new ResourceNotFoundException(
+                "JOB_NOT_FOUND",
+                "Job was not found: " + id
+        );
     }
 
     private Map<UUID, MaterialAllocationRequest> uniqueMaterials(

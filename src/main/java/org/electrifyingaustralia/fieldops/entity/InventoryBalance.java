@@ -50,6 +50,19 @@ public class InventoryBalance extends BaseEntity {
         reservedQuantity = Math.addExact(reservedQuantity, quantity);
     }
 
+    public void releaseReservation(int quantity) {
+        requirePositive(quantity);
+        ensureReservationExists(quantity);
+        reservedQuantity = Math.subtractExact(reservedQuantity, quantity);
+    }
+
+    public void dispatchReserved(int quantity) {
+        requirePositive(quantity);
+        ensureReservationExists(quantity);
+        onHandQuantity = Math.subtractExact(onHandQuantity, quantity);
+        reservedQuantity = Math.subtractExact(reservedQuantity, quantity);
+    }
+
     public int availableQuantity() {
         return onHandQuantity - reservedQuantity;
     }
@@ -57,6 +70,12 @@ public class InventoryBalance extends BaseEntity {
     private static void requirePositive(int quantity) {
         if (quantity <= 0) {
             throw new IllegalArgumentException("quantity must be greater than zero");
+        }
+    }
+
+    private void ensureReservationExists(int quantity) {
+        if (reservedQuantity < quantity) {
+            throw new IllegalStateException("insufficient reserved stock");
         }
     }
 }

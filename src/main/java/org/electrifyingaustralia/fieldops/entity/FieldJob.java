@@ -127,11 +127,32 @@ public class FieldJob extends BaseEntity {
         return Collections.unmodifiableList(allocations);
     }
 
+    public void dispatch() {
+        transition(JobStatus.ALLOCATED, JobStatus.DISPATCHED);
+    }
+
+    public void cancel() {
+        transition(JobStatus.ALLOCATED, JobStatus.CANCELLED);
+    }
+
+    public void complete() {
+        transition(JobStatus.DISPATCHED, JobStatus.COMPLETED);
+    }
+
     private static String requireText(String value, String fieldName) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(fieldName + " is required");
         }
         return value.trim();
+    }
+
+    private void transition(JobStatus expected, JobStatus next) {
+        if (status != expected) {
+            throw new IllegalStateException(
+                    "Job must be " + expected + " before becoming " + next
+            );
+        }
+        status = next;
     }
 
     public record Material(Product product, int quantity) {

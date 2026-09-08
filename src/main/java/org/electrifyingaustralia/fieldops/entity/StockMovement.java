@@ -86,9 +86,10 @@ public class StockMovement {
             String note,
             User performedBy
     ) {
+        requirePositive(quantity);
         StockMovement movement = new StockMovement();
-        movement.product = product;
-        movement.receipt = receipt;
+        movement.product = Objects.requireNonNull(product, "product is required");
+        movement.receipt = Objects.requireNonNull(receipt, "receipt is required");
         movement.movementType = StockMovementType.STOCK_RECEIPT;
         movement.onHandDelta = quantity;
         movement.reservedDelta = 0;
@@ -111,9 +112,10 @@ public class StockMovement {
             int reservedAfter,
             User performedBy
     ) {
+        requirePositive(quantity);
         StockMovement movement = new StockMovement();
-        movement.product = product;
-        movement.job = job;
+        movement.product = Objects.requireNonNull(product, "product is required");
+        movement.job = Objects.requireNonNull(job, "job is required");
         movement.movementType = StockMovementType.JOB_RESERVATION;
         movement.onHandDelta = 0;
         movement.reservedDelta = quantity;
@@ -127,8 +129,100 @@ public class StockMovement {
         return movement;
     }
 
+    public static StockMovement reservationRelease(
+            Product product,
+            FieldJob job,
+            int quantity,
+            int onHandAfter,
+            int reservedAfter,
+            String reason,
+            User performedBy
+    ) {
+        requirePositive(quantity);
+        StockMovement movement = jobMovement(
+                product,
+                job,
+                StockMovementType.JOB_RESERVATION_RELEASE,
+                0,
+                -quantity,
+                onHandAfter,
+                reservedAfter,
+                performedBy
+        );
+        movement.reference = job.getJobId();
+        movement.note = requireText(reason, "reason");
+        return movement;
+    }
+
+    public static StockMovement dispatch(
+            Product product,
+            FieldJob job,
+            int quantity,
+            int onHandAfter,
+            int reservedAfter,
+            String dispatchReference,
+            String note,
+            User performedBy
+    ) {
+        requirePositive(quantity);
+        StockMovement movement = jobMovement(
+                product,
+                job,
+                StockMovementType.JOB_DISPATCH,
+                -quantity,
+                -quantity,
+                onHandAfter,
+                reservedAfter,
+                performedBy
+        );
+        movement.reference = requireText(
+                dispatchReference,
+                "dispatchReference"
+        );
+        movement.note = normalizeOptional(note);
+        return movement;
+    }
+
+    private static StockMovement jobMovement(
+            Product product,
+            FieldJob job,
+            StockMovementType movementType,
+            int onHandDelta,
+            int reservedDelta,
+            int onHandAfter,
+            int reservedAfter,
+            User performedBy
+    ) {
+        StockMovement movement = new StockMovement();
+        movement.product = Objects.requireNonNull(product, "product is required");
+        movement.job = Objects.requireNonNull(job, "job is required");
+        movement.movementType = movementType;
+        movement.onHandDelta = onHandDelta;
+        movement.reservedDelta = reservedDelta;
+        movement.onHandAfter = onHandAfter;
+        movement.reservedAfter = reservedAfter;
+        movement.performedBy = Objects.requireNonNull(
+                performedBy,
+                "performedBy is required"
+        );
+        return movement;
+    }
+
     private static String normalizeOptional(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private static String requireText(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(fieldName + " is required");
+        }
+        return value.trim();
+    }
+
+    private static void requirePositive(int quantity) {
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("quantity must be greater than zero");
+        }
     }
 
 }

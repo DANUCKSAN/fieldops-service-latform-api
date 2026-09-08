@@ -1,6 +1,6 @@
 # FieldOps operations workflow
 
-This monolithic service implements the first complete FieldOps workflow:
+This monolithic service implements the complete FieldOps stock and job workflow:
 
 1. An `ADMIN` or `WAREHOUSE_OPR` registers product variations.
 2. An `ADMIN` creates the five installer records once their real names are known.
@@ -9,6 +9,8 @@ This monolithic service implements the first complete FieldOps workflow:
 5. An `ADMIN` or `WAREHOUSE_OPR` submits the CRM job ID, customer details,
    one panel, one battery, one inverter, and one installer.
 6. The job and all material reservations commit in one PostgreSQL transaction.
+7. The job is either dispatched and completed, or cancelled before dispatch.
+8. Every status and inventory effect is retained in an append-only audit trail.
 
 ## Project structure
 
@@ -33,9 +35,9 @@ Inventory has three quantities:
 - `availableQuantity`: `onHandQuantity - reservedQuantity`.
 
 Creating a job increases `reservedQuantity`, so availability updates immediately.
-It does not reduce physical on-hand stock. A later dispatch workflow can convert a
-reservation into a physical stock issue, and a later cancellation workflow can
-release a reservation.
+Dispatch subtracts the allocation from both on-hand and reserved stock.
+Cancellation subtracts it only from reserved stock. Completion has no inventory
+effect.
 
 ## Authentication and roles
 
@@ -49,6 +51,10 @@ FieldOps role in the `roles` claim.
 | Create installer | Yes | No |
 | List installers | Yes | Yes |
 | Create/list/view jobs | Yes | Yes |
+| Dispatch jobs | Yes | Yes |
+| Complete jobs | Yes | Yes |
+| Cancel allocated jobs | Yes | No |
+| View lifecycle history | Yes | Yes |
 
 Every operations request resolves the local `app_users` record and rejects a
 disabled user. Audit records reference that local user; actor identity is never
@@ -179,6 +185,60 @@ The response is `201 Created` with a `Location` header. Use:
   or duplicate retry.
 - `GET /api/v1/jobs?page=0&size=20` for the job list. Page size is capped at 100.
 
+## 5. Dispatch an allocated job
+
+`POST /api/v1/jobs/{internalUuid}/dispatch`
+
+```json
+{
+  "dispatchReference": "DISPATCH-2026-0091",
+  "note": "Loaded onto vehicle 12"
+}
+```
+
+The job must be `ALLOCATED`. The server locks the job and all three inventory
+balances, changes the status to `DISPATCHED`, and subtracts each allocation from
+both on-hand and reserved stock. It writes one `JOB_DISPATCH` movement per
+product and one status-history entry in the same transaction.
+
+An exact retry after a successful dispatch returns `200 OK` with the current job
+and does not subtract stock again.
+
+## 6. Complete a dispatched job
+
+`POST /api/v1/jobs/{internalUuid}/complete`
+
+No request body is required. The job must be `DISPATCHED`. Completion changes
+the status to `COMPLETED` and appends its audit entry; inventory is unchanged.
+Repeating completion is idempotent.
+
+## 7. Cancel an allocated job
+
+`POST /api/v1/jobs/{internalUuid}/cancel` (ADMIN only)
+
+```json
+{
+  "reason": "Customer withdrew before dispatch"
+}
+```
+
+Only an `ALLOCATED` job can be cancelled. The transaction releases all three
+reservations without changing on-hand stock, writes one
+`JOB_RESERVATION_RELEASE` movement per product, changes the status to
+`CANCELLED`, and appends the reason to the lifecycle history. Repeating
+cancellation is idempotent.
+
+Dispatch and cancellation race safely: the job row is locked first, so exactly
+one command can apply its inventory effect and the other receives `409`.
+
+## 8. Read lifecycle history
+
+`GET /api/v1/jobs/{internalUuid}/history`
+
+The response is ordered oldest first and includes previous/new status, reference,
+note, actor ID/name/role, and timestamp. The database rejects updates and deletes
+against this history. Jobs created before V4 may have no initial history row.
+
 ## Error contract
 
 Errors use RFC Problem Details and include a stable `code` property.
@@ -189,7 +249,7 @@ Errors use RFC Problem Details and include a stable `code` property.
 | 401 | Missing or invalid JWT |
 | 403 | Wrong role, invalid identity claims, or disabled user |
 | 404 | `PRODUCT_NOT_FOUND`, `INSTALLER_NOT_FOUND`, `JOB_NOT_FOUND` |
-| 409 | `DUPLICATE_PRODUCT_SKU`, `DUPLICATE_RECEIPT_REFERENCE`, `DUPLICATE_JOB_ID`, `INSUFFICIENT_STOCK`, `INACTIVE_PRODUCT`, `INACTIVE_INSTALLER` |
+| 409 | `DUPLICATE_PRODUCT_SKU`, `DUPLICATE_RECEIPT_REFERENCE`, `DUPLICATE_JOB_ID`, `INSUFFICIENT_STOCK`, `INACTIVE_PRODUCT`, `INACTIVE_INSTALLER`, `INVALID_JOB_TRANSITION`, `RESERVATION_MISMATCH` |
 | 422 | `INVALID_PRODUCT_BRAND`, `INVALID_MATERIAL_COMBINATION` |
 
 ## Runtime configuration
@@ -203,7 +263,6 @@ export FIELDOPS_DB_PASSWORD='your-password'
 export FIELDOPS_ALLOWED_ORIGINS='http://localhost:3000,https://fieldops.example.com'
 ```
 
-For tests, set the corresponding `FIELDOPS_TEST_DB_URL`,
-`FIELDOPS_TEST_DB_USERNAME`, and `FIELDOPS_TEST_DB_PASSWORD` variables. Integration
-tests require PostgreSQL because they verify real row-locking and database
-constraints.
+Tests start disposable PostgreSQL 16 through Testcontainers. Docker must be
+available because the integration suite verifies real row locking, migrations,
+constraints, append-only triggers, authorization, and concurrent transitions.
