@@ -1,9 +1,9 @@
 # FieldOps Service Platform API
 
 FieldOps is a layered Spring Boot monolith for managing solar product stock,
-installers, and job allocation. An administrator or warehouse operator can create
-a confirmed CRM job, select its panel, battery, inverter, and installer, and reserve
-the required stock in one database transaction.
+installers, and the complete job lifecycle. An administrator or warehouse
+operator can allocate a confirmed CRM job, dispatch its reserved materials, and
+complete it. Administrators can cancel an allocated job and release its stock.
 
 ## Current workflow
 
@@ -14,6 +14,9 @@ flowchart LR
     C --> D[Create a CRM job]
     D --> E[Allocate one panel, battery, and inverter]
     E --> F[Reserve stock atomically]
+    F -->|Dispatch| G[Consume on-hand and reserved stock]
+    G --> H[Complete job]
+    F -->|Cancel| I[Release reserved stock]
 ```
 
 A job contains:
@@ -25,8 +28,9 @@ A job contains:
 - one active installer.
 
 Creating a job increases `reservedQuantity` and immediately reduces available
-stock. It does not reduce physical `onHandQuantity`; stock dispatch and job
-cancellation are outside the current scope.
+stock. Dispatch reduces both `onHandQuantity` and `reservedQuantity` by the
+allocated quantities. Cancellation leaves on-hand stock unchanged and releases
+the reservations. Completion changes only job status.
 
 ## Supported products
 
@@ -183,6 +187,10 @@ table. Disabled local users are rejected.
 | Create installers | Yes | No |
 | View active installers | Yes | Yes |
 | Create and view jobs | Yes | Yes |
+| Dispatch jobs | Yes | Yes |
+| Complete jobs | Yes | Yes |
+| Cancel allocated jobs | Yes | No |
+| View job status history | Yes | Yes |
 
 ## API overview
 
@@ -200,13 +208,17 @@ table. Disabled local users are rejected.
 | `GET` | `/api/v1/jobs` | List jobs with pagination |
 | `GET` | `/api/v1/jobs/{id}` | Get a job by its internal UUID |
 | `GET` | `/api/v1/jobs/by-job-id/{jobId}` | Get a job by its external CRM job ID |
+| `POST` | `/api/v1/jobs/{id}/dispatch` | Dispatch the job and consume reserved stock |
+| `POST` | `/api/v1/jobs/{id}/complete` | Complete a dispatched job |
+| `POST` | `/api/v1/jobs/{id}/cancel` | Cancel an allocated job and release stock; admin only |
+| `GET` | `/api/v1/jobs/{id}/history` | Return the append-only status audit trail |
 
 For request examples, response behavior, inventory semantics, and the complete
 error contract, see [FIELD_OPERATIONS_API.md](FIELD_OPERATIONS_API.md).
 
 ## Transaction and inventory guarantees
 
-Job creation is atomic. The service:
+Every inventory-changing job command is atomic. Job creation:
 
 1. validates the user, installer, and exact material composition;
 2. locks the selected inventory rows in a deterministic order;
@@ -219,26 +231,25 @@ If any material is unavailable, the complete operation rolls back. Unique CRM
 job IDs, receipt references, and product SKUs prevent accidental duplicate stock
 changes. Concurrent requests cannot over-reserve the same inventory.
 
+Dispatch and cancellation first lock the job, then lock all allocated inventory
+rows in deterministic order. This guarantees that concurrent commands cannot
+both win. Successful lifecycle commands write both an immutable inventory
+movement and an immutable status-history record in the same transaction. Exact
+command retries are idempotent and do not apply inventory twice.
+
 Errors use RFC Problem Details and include a stable application `code` property.
 
 ## Run the tests
 
-Configure the dedicated test database:
+Run the complete test suite with Docker available:
 
 ```shell
-export FIELDOPS_TEST_DB_URL='jdbc:postgresql://localhost:5432/fieldops-test'
-export FIELDOPS_TEST_DB_USERNAME='postgres'
-export FIELDOPS_TEST_DB_PASSWORD='your-test-password'
-
 ./mvnw test
 ```
 
-> **Warning:** integration tests truncate the configured application tables.
-> Never point `FIELDOPS_TEST_DB_URL` at a development, staging, or production
-> database.
-
-The tests use mock JWT authentication, so a live OIDC provider is not required
-for the test suite.
+Testcontainers starts an isolated PostgreSQL 16 container and Flyway builds its
+schema from scratch. The tests use mock JWT authentication, so neither a local
+database nor a live OIDC provider is required.
 
 ## Build and run the executable JAR
 
@@ -268,9 +279,11 @@ Flyway migrations are stored in `src/main/resources/db/migration`:
 - `V2` adds external OIDC identity mapping.
 - `V3` creates products, inventory balances, installers, jobs, allocations,
   receipts, and the append-only stock movement ledger.
+- `V4` adds dispatch, completion, cancellation, reservation release, and the
+  append-only job status history.
 
 Never edit or rename a migration that has already been applied. Add a new
-versioned migration such as `V4__describe_the_change.sql` for every schema
+versioned migration such as `V5__describe_the_change.sql` for every schema
 change.
 
 ## Development conventions
@@ -291,8 +304,8 @@ Implemented now:
 - installer creation and selection;
 - warehouse stock receipts;
 - job creation and material allocation;
-- automatic stock reservation; and
-- immutable stock movement history.
-
-Future workflows can add dispatch, installation progress, job cancellation, and
-reservation release without changing the current allocation contract.
+- automatic stock reservation;
+- dispatch and physical stock consumption;
+- job completion;
+- cancellation and reservation release; and
+- immutable stock and lifecycle audit history.
