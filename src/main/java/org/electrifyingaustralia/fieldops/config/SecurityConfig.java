@@ -40,7 +40,12 @@ public class SecurityConfig {
                         .authenticationEntryPoint(problemHandler)
                         .accessDeniedHandler(problemHandler))
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/error").permitAll()
+                        .requestMatchers(
+                                "/error",
+                                "/v3/api-docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html"
+                        ).permitAll()
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/v1/users/me"
@@ -55,7 +60,8 @@ public class SecurityConfig {
                                 "/api/v1/installers/**",
                                 "/api/v1/jobs/**"
                         ).hasAnyRole("ADMIN", "WAREHOUSE_OPR")
-                        .anyRequest().denyAll())
+                        .anyRequest().denyAll()
+                )
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .authenticationEntryPoint(problemHandler)
                         .accessDeniedHandler(problemHandler)
